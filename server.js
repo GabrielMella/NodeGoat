@@ -11,6 +11,7 @@ const swig = require("swig");
 const MongoClient = require("mongodb").MongoClient; // Driver for connecting to MongoDB
 const http = require("http");
 const marked = require("marked");
+const sanitizeHtml = require("sanitize-html");
 //const nosniff = require('dont-sniff-mimetype');
 const app = express(); // Web framework to handle routing requests
 const routes = require("./app/routes");
@@ -123,10 +124,8 @@ MongoClient.connect(db, (err, db) => {
 
     // Initializing marked library
     // Fix for A9 - Insecure Dependencies
-    marked.setOptions({
-        sanitize: true
-    });
-    app.locals.marked = marked;
+    // sanitize: true was removed in marked v4; use sanitize-html on the output instead
+    app.locals.marked = (src) => sanitizeHtml(marked.parse(src));
 
     // Application routes
     routes(app, db);
