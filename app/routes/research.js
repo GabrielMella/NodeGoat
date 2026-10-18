@@ -4,6 +4,10 @@ const {
     environmentalScripts
 } = require("../../config/config");
 
+const ALLOWED_URLS = [
+    "https://finance.yahoo.com/quote/"
+];
+
 function ResearchHandler(db) {
     "use strict";
 
@@ -12,7 +16,13 @@ function ResearchHandler(db) {
     this.displayResearch = (req, res) => {
 
         if (req.query.symbol) {
-            const url = req.query.url + req.query.symbol;
+            const baseUrl = req.query.url;
+
+            if (!baseUrl || !ALLOWED_URLS.includes(baseUrl)) {
+                return res.status(400).send("Invalid or disallowed URL.");
+            }
+
+            const url = baseUrl + req.query.symbol;
             return needle.get(url, (error, newResponse, body) => {
                 if (!error && newResponse.statusCode === 200) {
                     res.writeHead(200, {
