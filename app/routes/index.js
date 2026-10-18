@@ -60,7 +60,7 @@ const index = (app, db) => {
      */
 
     // Allocations Page
-    app.get("/allocations/:userId", isLoggedIn, allocationsHandler.displayAllocations);
+    app.get("/allocations", isLoggedIn, allocationsHandler.displayAllocations);
 
     // Memos Page
     app.get("/memos", isLoggedIn, memosHandler.displayMemos);
