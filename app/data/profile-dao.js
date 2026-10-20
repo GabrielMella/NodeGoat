@@ -12,32 +12,29 @@ function ProfileDAO(db) {
 
     const users = db.collection("users");
 
-    /* Fix for A6 - Sensitive Data Exposure
-
-    // Use crypto module to save sensitive data such as ssn, dob in encrypted format
+    // Use crypto module to store sensitive PII fields encrypted at rest
     const crypto = require("crypto");
     const config = require("../../config/config");
 
-    /// Helper method create initialization vector
-    // By default the initialization vector is not secure enough, so we create our own
-    const createIV = () => {
-        // create a random salt for the PBKDF2 function - 16 bytes is the minimum length according to NIST
-        const salt = crypto.randomBytes(16);
-        return crypto.pbkdf2Sync(config.cryptoKey, salt, 100000, 512, "sha512");
-    };
+    // Derive a fixed-length 32-byte key from the configured cryptoKey
+    const getKey = () => crypto.createHash("sha256").update(String(config.cryptoKey)).digest();
 
-    // Helper methods to encryt / decrypt
+    // Encrypt a value using AES-256-CBC with a fresh random 16-byte IV.
+    // Returns "<ivHex>:<ciphertextHex>" so the IV is self-contained for decryption.
     const encrypt = (toEncrypt) => {
-        config.iv = createIV();
-        const cipher = crypto.createCipheriv(config.cryptoAlgo, config.cryptoKey, config.iv);
-        return `${cipher.update(toEncrypt, "utf8", "hex")} ${cipher.final("hex")}`;
+        const iv = crypto.randomBytes(16);
+        const cipher = crypto.createCipheriv("aes-256-cbc", getKey(), iv);
+        const encrypted = cipher.update(String(toEncrypt), "utf8", "hex") + cipher.final("hex");
+        return `${iv.toString("hex")}:${encrypted}`;
     };
 
+    // Decrypt a value previously produced by encrypt().
     const decrypt = (toDecrypt) => {
-        const decipher = crypto.createDecipheriv(config.cryptoAlgo, config.cryptoKey, config.iv);
-        return `${decipher.update(toDecrypt, "hex", "utf8")} ${decipher.final("utf8")}`;
+        const [ivHex, encrypted] = toDecrypt.split(":");
+        const iv = Buffer.from(ivHex, "hex");
+        const decipher = crypto.createDecipheriv("aes-256-cbc", getKey(), iv);
+        return decipher.update(encrypted, "hex", "utf8") + decipher.final("utf8");
     };
-    */
 
     this.updateUser = (userId, firstName, lastName, ssn, dob, address, bankAcc, bankRouting, callback) => {
 
@@ -52,28 +49,19 @@ function ProfileDAO(db) {
         if (address) {
             user.address = address;
         }
+        // Encrypt sensitive PII fields before storing in MongoDB
         if (bankAcc) {
-            user.bankAcc = bankAcc;
+            user.bankAcc = encrypt(bankAcc);
         }
         if (bankRouting) {
-            user.bankRouting = bankRouting;
+            user.bankRouting = encrypt(bankRouting);
         }
         if (ssn) {
-            user.ssn = ssn;
-        }
-        if (dob) {
-            user.dob = dob;
-        }
-        /*
-        // Fix for A7 - Sensitive Data Exposure
-        // Store encrypted ssn and DOB
-        if(ssn) {
             user.ssn = encrypt(ssn);
         }
-        if(dob) {
+        if (dob) {
             user.dob = encrypt(dob);
         }
-        */
 
         users.update({
                 _id: parseInt(userId)
@@ -97,12 +85,11 @@ function ProfileDAO(db) {
             },
             (err, user) => {
                 if (err) return callback(err, null);
-                /*
-                // Fix for A6 - Sensitive Data Exposure
-                // Decrypt ssn and DOB values to display to user
-                user.ssn = user.ssn ? decrypt(user.ssn) : "";
-                user.dob = user.dob ? decrypt(user.dob) : "";
-                */
+                // Decrypt sensitive PII fields before returning to the application
+                if (user.ssn) { user.ssn = decrypt(user.ssn); }
+                if (user.dob) { user.dob = decrypt(user.dob); }
+                if (user.bankAcc) { user.bankAcc = decrypt(user.bankAcc); }
+                if (user.bankRouting) { user.bankRouting = decrypt(user.bankRouting); }
 
                 callback(null, user);
             }
